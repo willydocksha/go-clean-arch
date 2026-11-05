@@ -1,0 +1,99 @@
+# full local stack: postgres + redis + minio (s3) + api
+# start:        docker compose up -d --build
+# sample data:  docker compose run --rm seed
+
+# shared env for every app container
+x-app-env: &app-env
+  APP_ENV: development
+  LOG_LEVEL: debug
+  DATABASE_URL: postgres://postgres:postgres@postgres:5432/go_clean_arch?sslmode=disable
+  REDIS_ADDR: redis:6379
+  REDIS_KEY_PREFIX: "go-clean-arch:"
+  S3_BUCKET: go-clean-arch
+  S3_REGION: us-east-1
+  S3_ENDPOINT: http://minio:9000
+  # browser on the host reaches minio via localhost
+  S3_PRESIGN_ENDPOINT: http://localhost:9000
+  S3_ACCESS_KEY_ID: minioadmin
+  S3_SECRET_ACCESS_KEY: minioadmin
+  S3_FORCE_PATH_STYLE: "true"
+  S3_CREATE_BUCKET: "true"
+
+services:
+  # postgres database
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: go_clean_arch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d go_clean_arch"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # redis cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # s3-compatible storage (console: http://localhost:9001, minioadmin / minioadmin)
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  # apply migrations, then exit
+  migrate:
+    build: .
+    entrypoint: ["/migrate", "up"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # optional sample data: docker compose run --rm seed
+  seed:
+    build: .
+    entrypoint: ["/seed"]
+    environment: *app-env
+    profiles: ["tools"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # api service
+  api:
+    build: .
+    environment: *app-env
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+volumes:
+  pgdata:
+  miniodata:
