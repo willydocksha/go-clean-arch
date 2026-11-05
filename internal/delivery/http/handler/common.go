@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/willydocksha/go-clean-arch/internal/delivery/http/response"
 	"github.com/willydocksha/go-clean-arch/internal/domain"
 )
@@ -89,4 +91,9 @@ func deliverFile(w http.ResponseWriter, r *http.Request, f *domain.File, files d
 	default:
 		response.Error(w, r, fmt.Errorf("%w: delivery must be file, base64 or url", domain.ErrInvalidInput))
 	}
+}
+
+// read a path parameter such as {id}
+func urlParam(r *http.Request, key string) string {
+	return chi.URLParam(r, key)
 }

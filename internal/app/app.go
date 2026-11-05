@@ -108,6 +108,7 @@ func Run(cfg *config.Config, log *slog.Logger) error {
 	router := deliveryhttp.NewRouter(
 		deliveryhttp.RouterConfig{Logger: log, AllowedOrigins: cfg.HTTP.AllowedOrigins},
 		handler.NewHealthHandler(deps),
+		// api handlers mounted under /api/v1
 		handler.NewUserHandler(userUC),
 		handler.NewProductHandler(productUC, fileUC, cfg.HTTP.MaxUploadSize),
 		handler.NewFileHandler(fileUC, cfg.HTTP.MaxUploadSize),

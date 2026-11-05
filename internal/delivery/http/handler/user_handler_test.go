@@ -101,3 +101,25 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("healthz: want 200, got %d", code)
 	}
 }
+
+// unknown routes and wrong methods return json errors
+func TestRouterFallbacks(t *testing.T) {
+	srv := newServer(t)
+
+	// unknown route -> 404 json
+	code, body := do(t, http.MethodGet, srv.URL+"/api/v1/nope", "")
+	if code != http.StatusNotFound || body["success"] != false {
+		t.Fatalf("not found: got %d %v", code, body)
+	}
+
+	// known route, wrong method -> 405 json
+	code, body = do(t, http.MethodPut, srv.URL+"/api/v1/users", "")
+	if code != http.StatusMethodNotAllowed || body["success"] != false {
+		t.Fatalf("method not allowed: got %d %v", code, body)
+	}
+
+	// trailing slash on collection still works
+	if code, _ := do(t, http.MethodGet, srv.URL+"/api/v1/users/", ""); code != http.StatusOK {
+		t.Fatalf("trailing slash: got %d", code)
+	}
+}

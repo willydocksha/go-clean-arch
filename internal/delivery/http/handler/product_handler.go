@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 	"strings"
 
 	"github.com/willydocksha/go-clean-arch/internal/delivery/http/response"
@@ -20,17 +22,26 @@ func NewProductHandler(products domain.ProductUsecase, files domain.FileUsecase,
 	return &ProductHandler{products: products, files: files, maxUploadSize: maxUploadSize}
 }
 
-// register product routes (literal paths win over {id})
-func (h *ProductHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/products", h.List)
-	mux.HandleFunc("POST /api/v1/products", h.Create)
-	mux.HandleFunc("GET /api/v1/products/export", h.Export)
-	mux.HandleFunc("GET /api/v1/products/import/template", h.ImportTemplate)
-	mux.HandleFunc("POST /api/v1/products/import", h.Import)
-	mux.HandleFunc("GET /api/v1/products/{id}", h.GetByID)
-	mux.HandleFunc("PUT /api/v1/products/{id}", h.Replace)
-	mux.HandleFunc("PATCH /api/v1/products/{id}/status", h.UpdateStatus)
-	mux.HandleFunc("DELETE /api/v1/products/{id}", h.Delete)
+// register product routes (static paths win over {id} in chi)
+func (h *ProductHandler) Register(r chi.Router) {
+	r.Route("/products", func(r chi.Router) {
+		// collection
+		r.Get("/", h.List)
+		r.Post("/", h.Create)
+
+		// files
+		r.Get("/export", h.Export)
+		r.Get("/import/template", h.ImportTemplate)
+		r.Post("/import", h.Import)
+
+		// single item
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", h.GetByID)
+			r.Put("/", h.Replace)
+			r.Patch("/status", h.UpdateStatus)
+			r.Delete("/", h.Delete)
+		})
+	})
 }
 
 // get /api/v1/products?q=&category=&status=&sort=price&order=desc&limit=&offset=
@@ -50,7 +61,7 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // get /api/v1/products/{id}
 func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	p, err := h.products.GetByID(r.Context(), r.PathValue("id"))
+	p, err := h.products.GetByID(r.Context(), urlParam(r, "id"))
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -80,7 +91,7 @@ func (h *ProductHandler) Replace(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, err)
 		return
 	}
-	p, err := h.products.Replace(r.Context(), r.PathValue("id"), in)
+	p, err := h.products.Replace(r.Context(), urlParam(r, "id"), in)
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -97,7 +108,7 @@ func (h *ProductHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, err)
 		return
 	}
-	p, err := h.products.UpdateStatus(r.Context(), r.PathValue("id"), in.Status)
+	p, err := h.products.UpdateStatus(r.Context(), urlParam(r, "id"), in.Status)
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -107,7 +118,7 @@ func (h *ProductHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 // delete /api/v1/products/{id}
 func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.products.Delete(r.Context(), r.PathValue("id")); err != nil {
+	if err := h.products.Delete(r.Context(), urlParam(r, "id")); err != nil {
 		response.Error(w, r, err)
 		return
 	}

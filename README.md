@@ -1,6 +1,6 @@
 # go-clean-arch
 
-Boilerplate REST API Go (1.27) dengan **Clean Architecture**. Sudah termasuk:
+Boilerplate REST API Go (1.27) dengan **Clean Architecture**, memakai router [chi](https://github.com/go-chi/chi) (100% kompatibel dengan `net/http`). Sudah termasuk:
 
 - **CRUD contoh** (`products`) sampai ke PostgreSQL: list (filter, search, sort, pagination), detail, create, `PUT` (edit penuh), `PATCH` (edit 1 field), delete
 - **Migration** (tanpa tool tambahan, SQL di-embed ke binary) dan **seeder** data contoh
@@ -47,7 +47,7 @@ internal/
     handler/        → HTTP handler (user, product, file, health)
     middleware/     → request id, logger, recoverer, cors
     response/       → format JSON standar + response file/base64
-    router.go       → daftar route + middleware
+    router.go       → router chi: middleware global, /healthz, /readyz, group /api/v1
   config/           → baca env (otomatis load .env)
   app/              → composition root: menyambungkan semua layer + graceful shutdown
 pkg/                → library reusable, bisa di-copy ke project lain
@@ -193,7 +193,7 @@ Semua response JSON memakai format yang sama:
 { "success": false, "error": "invalid input: name is required; price is required and must be >= 0" }
 ```
 
-Error domain otomatis jadi status HTTP: invalid input → `400`, not found → `404`, conflict → `409`, body terlalu besar → `413`, S3 mati → `503`, lainnya → `500` (detail tidak dibocorkan ke client, hanya di-log).
+Error domain otomatis jadi status HTTP (route yang tidak ada → `404`, method salah → `405`, juga dalam format JSON): invalid input → `400`, not found → `404`, conflict → `409`, body terlalu besar → `413`, S3 mati → `503`, lainnya → `500` (detail tidak dibocorkan ke client, hanya di-log).
 
 ### Health
 
@@ -434,8 +434,28 @@ Contoh menambah modul `orders`:
 2. `internal/domain/order.go`: entity, input, interface `OrderRepository` dan `OrderUsecase`.
 3. `internal/repository/postgres/order_repository.go`: query SQL.
 4. `internal/usecase/order_usecase.go`: validasi dan business logic. Pakai `domain.Cache` / `domain.FileStorage` kalau perlu.
-5. `internal/delivery/http/handler/order_handler.go`: handler + method `Register(mux)`.
+5. `internal/delivery/http/handler/order_handler.go`: handler + method `Register(r chi.Router)`. Path di sini relatif terhadap `/api/v1`.
 6. Sambungkan di `internal/app/app.go` (repo → usecase → handler), lalu masukkan handler ke `NewRouter`.
+
+Contoh `Register` dengan middleware khusus untuk sebagian route (misalnya auth):
+
+```go
+func (h *OrderHandler) Register(r chi.Router) {
+    r.Route("/orders", func(r chi.Router) {
+        r.Get("/", h.List)          // GET /api/v1/orders
+        r.Get("/{id}", h.GetByID)   // ambil id dengan urlParam(r, "id")
+
+        // route di dalam group ini wajib login
+        r.Group(func(r chi.Router) {
+            r.Use(authMiddleware)
+            r.Post("/", h.Create)
+            r.Delete("/{id}", h.Delete)
+        })
+    })
+}
+```
+
+Middleware bawaan chi (`github.com/go-chi/chi/v5/middleware`, misalnya `Timeout`, `Throttle`, `Compress`) dan middleware `net/http` lain bisa langsung dipakai lewat `r.Use(...)`.
 
 Jadikan modul `products` sebagai contoh, karena sudah memakai semua pola (filter, cache, export/import).
 

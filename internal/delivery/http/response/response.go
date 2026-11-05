@@ -72,6 +72,11 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	write(w, status, Body{Success: false, Error: msg})
 }
 
+// 405 for a known route with an unsupported method
+func MethodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	write(w, http.StatusMethodNotAllowed, Body{Success: false, Error: "method " + r.Method + " not allowed"})
+}
+
 // map domain errors to http status and safe message
 func mapError(err error) (int, string) {
 	var maxBytes *http.MaxBytesError

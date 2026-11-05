@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/willydocksha/go-clean-arch/internal/delivery/http/response"
 	"github.com/willydocksha/go-clean-arch/internal/domain"
 )
@@ -17,13 +19,15 @@ func NewUserHandler(uc domain.UserUsecase) *UserHandler {
 	return &UserHandler{usecase: uc}
 }
 
-// register user routes on the mux
-func (h *UserHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/users", h.Create)
-	mux.HandleFunc("GET /api/v1/users", h.List)
-	mux.HandleFunc("GET /api/v1/users/{id}", h.GetByID)
-	mux.HandleFunc("PATCH /api/v1/users/{id}", h.Update)
-	mux.HandleFunc("DELETE /api/v1/users/{id}", h.Delete)
+// register user routes on the router
+func (h *UserHandler) Register(r chi.Router) {
+	r.Route("/users", func(r chi.Router) {
+		r.Get("/", h.List)
+		r.Post("/", h.Create)
+		r.Get("/{id}", h.GetByID)
+		r.Patch("/{id}", h.Update)
+		r.Delete("/{id}", h.Delete)
+	})
 }
 
 // post /api/v1/users
@@ -67,7 +71,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // get /api/v1/users/{id}
 func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	user, err := h.usecase.GetByID(r.Context(), r.PathValue("id"))
+	user, err := h.usecase.GetByID(r.Context(), urlParam(r, "id"))
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -82,7 +86,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, err)
 		return
 	}
-	user, err := h.usecase.Update(r.Context(), r.PathValue("id"), input)
+	user, err := h.usecase.Update(r.Context(), urlParam(r, "id"), input)
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -92,7 +96,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // delete /api/v1/users/{id}
 func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.usecase.Delete(r.Context(), r.PathValue("id")); err != nil {
+	if err := h.usecase.Delete(r.Context(), urlParam(r, "id")); err != nil {
 		response.Error(w, r, err)
 		return
 	}

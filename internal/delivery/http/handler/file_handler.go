@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/willydocksha/go-clean-arch/internal/delivery/http/response"
 	"github.com/willydocksha/go-clean-arch/internal/domain"
 )
@@ -20,13 +22,15 @@ func NewFileHandler(files domain.FileUsecase, maxUploadSize int64) *FileHandler 
 }
 
 // register file routes; keys contain slashes so they travel as ?key=
-func (h *FileHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/files", h.Upload)
-	mux.HandleFunc("POST /api/v1/files/presign-upload", h.PresignUpload)
-	mux.HandleFunc("GET /api/v1/files/url", h.PresignDownload)
-	mux.HandleFunc("GET /api/v1/files/download", h.Download)
-	mux.HandleFunc("DELETE /api/v1/files", h.Delete)
-	mux.HandleFunc("POST /api/v1/files/parse", h.Parse)
+func (h *FileHandler) Register(r chi.Router) {
+	r.Route("/files", func(r chi.Router) {
+		r.Post("/", h.Upload)
+		r.Delete("/", h.Delete)
+		r.Post("/presign-upload", h.PresignUpload)
+		r.Get("/url", h.PresignDownload)
+		r.Get("/download", h.Download)
+		r.Post("/parse", h.Parse)
+	})
 }
 
 // post /api/v1/files (multipart "file", optional "folder") -> key + presigned url

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/willydocksha/go-clean-arch/internal/delivery/http/response"
 )
 
@@ -23,10 +25,10 @@ func NewHealthHandler(deps map[string]Pinger) *HealthHandler {
 	return &HealthHandler{deps: deps}
 }
 
-// register health routes on the mux
-func (h *HealthHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /healthz", h.Liveness)
-	mux.HandleFunc("GET /readyz", h.Readiness)
+// register health routes on the router
+func (h *HealthHandler) Register(r chi.Router) {
+	r.Get("/healthz", h.Liveness)
+	r.Get("/readyz", h.Readiness)
 }
 
 // liveness: process is up
